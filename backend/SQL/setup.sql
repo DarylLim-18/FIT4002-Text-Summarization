@@ -1,9 +1,17 @@
+CREATE DATABASE IF NOT EXISTS FIT4002;
 USE FIT4002;
+DROP TABLE IF EXISTS file;
 
 CREATE TABLE file (
-    id INT PRIMARY KEY,
-    filename VARCHAR(255) NOT NULL,
-    path VARCHAR(255) NOT NULL,
-    type ENUM('txt', 'pdf', 'docx') NOT NULL,
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    file_id INT AUTO_INCREMENT PRIMARY KEY,
+    file_name VARCHAR(255),
+    file_type ENUM('pdf', 'docx', 'txt') NOT NULL,
+    file_mime ENUM('application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain') NOT NULL,
+    file_upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    file_size INT,
+    file_data LONGBLOB,
+    file_description TEXT,
+    file_text LONGTEXT
 );
+
+
