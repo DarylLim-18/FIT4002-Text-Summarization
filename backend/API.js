@@ -10,7 +10,7 @@ const app = express();
 const port = 3000;
 
 
-//NOTE: THIS IS ALL SETUP DO NOT INTERFERE WITH ANY OF THIS OR ELSE IT WONT FUCKING WORK
+//NOTE: THIS IS ALL SETUP DO NOT INTERFERE WITH ANY OF THIS OR ELSE IT WONT WORK
 // MySQL Connection
 const db = mysql.createConnection({
     host: 'localhost',
@@ -43,12 +43,10 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.get('/openapi.json', (req, res) => res.json(swaggerSpec));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Multer Storage Setup
+// Multer Storage Setup - what this does is it stores files temporarily in '/uploads' can be used as a cache system
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
+    destination: 'uploads/',
+    filename: (req, file, cb) => {
         cb(null, Date.now() + path.extname(file.originalname));
     }
 });
@@ -59,12 +57,14 @@ const upload = multer({ storage });
 
 // HERE ONWARDS ARE THE API's
 
-// Upload Endpoint
+// Upload Route
 /**
  * @swagger
  * /upload:
  *   post:
- *     summary: Uploads a document
+ *     summary: Upload a file
+ *     consumes:
+ *       - multipart/form-data
  *     requestBody:
  *       required: true
  *       content:
@@ -77,56 +77,56 @@ const upload = multer({ storage });
  *                 format: binary
  *     responses:
  *       200:
- *         description: Document uploaded successfully
+ *         description: File uploaded successfully
  */
 app.post('/upload', upload.single('file'), (req, res) => {
-    const { filename, path: filepath, mimetype } = req.file;
+    const file = req.file;
+    const fileBuffer = fs.readFileSync(file.path);
 
-    const document = {
-        filename: filename,
-        path: filepath,
-        type: mimetype.split('/')[1] // e.g., 'pdf', 'docx', 'plain'
-    };
+    const sql = `INSERT INTO file (file_name, file_type, file_mime, file_size, file_data) VALUES (?, ?, ?, ?, ?)`;
+    const values = [
+        file.originalname,
+        path.extname(file.originalname).substring(1), // 'pdf', 'docx', etc.
+        file.mimetype,
+        file.size,
+        fileBuffer
+    ];
 
-    const sql = 'INSERT INTO file SET ?';
-    db.query(sql, document, (err, result) => {
-        if (err) throw err;
-        console.log('File metadata inserted with ID:', result.insertId);
-        res.send('File uploaded and metadata saved successfully');
+    db.query(sql, values, (err, result) => {
+        fs.unlinkSync(file.path); // Clean up temp file
+        if (err) return res.status(500).send(err);
+        res.send(`File uploaded successfully with ID: ${result.insertId}`);
     });
 });
 
-// Download by ID
+// Download Route
 /**
  * @swagger
  * /download/{id}:
  *   get:
- *     summary: Downloads a document by ID
+ *     summary: Download a file by ID
  *     parameters:
- *       - name: id
- *         in: path
- *         description: ID of the document to download
+ *       - in: path
+ *         name: id
  *         required: true
  *         schema:
  *           type: integer
  *     responses:
  *       200:
- *         description: Document downloaded successfully
+ *         description: File downloaded successfully
  *       404:
- *         description: Document not found
+ *         description: File not found
  */
 app.get('/download/:id', (req, res) => {
-    const documentId = req.params.id;
-    const sql = 'SELECT * FROM file WHERE id = ?';
+    const fileId = req.params.id;
+    db.query('SELECT * FROM file WHERE file_id = ?', [fileId], (err, results) => {
+        if (err) return res.status(500).send(err);
+        if (results.length === 0) return res.status(404).send('File not found');
 
-    db.query(sql, [documentId], (err, result) => {
-        if (err) throw err;
-        if (result.length > 0) {
-            const { path: filepath, filename } = result[0];
-            res.download(filepath, filename);
-        } else {
-            res.status(404).send('File not found');
-        }
+        const file = results[0];
+        res.setHeader('Content-Type', file.file_mime);
+        res.setHeader('Content-Disposition', `attachment; filename=${file.file_name}`);
+        res.send(file.file_data);
     });
 });
 
@@ -135,51 +135,30 @@ app.get('/download/:id', (req, res) => {
  * @swagger
  * /delete/{id}:
  *   delete:
- *     summary: Deletes a document by ID
+ *     summary: Delete a file by ID
  *     parameters:
- *       - name: id
- *         in: path
- *         description: ID of the document to delete
+ *       - in: path
+ *         name: id
  *         required: true
  *         schema:
  *           type: integer
  *     responses:
  *       200:
- *         description: Document deleted successfully
+ *         description: File deleted successfully
  *       404:
- *         description: Document not found
+ *         description: File not found
  */
 app.delete('/delete/:id', (req, res) => {
-    const documentId = req.params.id;
-
-    // First, get the file path
-    const getPathSql = 'SELECT path FROM file WHERE id = ?';
-    db.query(getPathSql, [documentId], (err, result) => {
-        if (err) throw err;
-        if (result.length === 0) {
-            return res.status(404).send('File not found in DB');
-        }
-
-        const filepath = result[0].path;
-
-        // Then delete the record from DB
-        const deleteSql = 'DELETE FROM file WHERE id = ?';
-        db.query(deleteSql, [documentId], (err, delResult) => {
-            if (err) throw err;
-
-            // Try to delete file from filesystem
-            fs.unlink(filepath, (fsErr) => {
-                if (fsErr) {
-                    console.warn('File not found on disk or already deleted.');
-                }
-                res.send('File deleted successfully');
-            });
-        });
+    const fileId = req.params.id;
+    db.query('DELETE FROM file WHERE file_id = ?', [fileId], (err, result) => {
+        if (err) return res.status(500).send(err);
+        if (result.affectedRows === 0) return res.status(404).send('File not found');
+        res.send('File deleted successfully');
     });
 });
 
 app.get('/', (req, res) => {
-    res.send('Welcome to the Document Upload API!');
+    res.send('Welcome to the Document Upload/Download API! Please type "/docs" at the end of the URL to go the testing interface');
 });
 
 // Start server
