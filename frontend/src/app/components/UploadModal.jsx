@@ -24,20 +24,26 @@ export default function UploadModal({ onUploadSuccess }) {
     if (!selectedFile) return;
 
     setIsUploading(true);
-    
+
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
+      // Optional: Add description or summary if needed
+      // formData.append('description', 'optional description');
+      // formData.append('summary', 'optional summary');
 
-      const response = await fetch('/api/documents', {
+      const response = await fetch('http://localhost:3000/upload', {
         method: 'POST',
         body: formData,
       });
 
       if (response.ok) {
-        onUploadSuccess?.(); // Notify parent component
+        onUploadSuccess?.(); // Notify parent to refresh file list
         setIsOpen(false);
         setSelectedFile(null);
+      } else {
+        const errorText = await response.text();
+        console.error('Upload failed:', errorText);
       }
     } catch (error) {
       console.error('Upload failed:', error);
@@ -46,10 +52,11 @@ export default function UploadModal({ onUploadSuccess }) {
     }
   };
 
+
   return (
     <>
       {/* Trigger Button */}
-      <button 
+      <button
         onClick={() => setIsOpen(true)}
         className={styles.uploadButton}
       >
@@ -58,17 +65,17 @@ export default function UploadModal({ onUploadSuccess }) {
 
       {/* Modal Overlay */}
       {isOpen && (
-        <div 
-          className={styles.modalOverlay} 
+        <div
+          className={styles.modalOverlay}
           onClick={() => !isUploading && setIsOpen(false)}
         >
-          <div 
+          <div
             className={styles.modalContent}
             onClick={(e) => e.stopPropagation()}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
           >
-            <button 
+            <button
               className={styles.closeButton}
               onClick={() => !isUploading && setIsOpen(false)}
               disabled={isUploading}
@@ -77,7 +84,7 @@ export default function UploadModal({ onUploadSuccess }) {
             </button>
 
             <h2>Upload Document</h2>
-            
+
             {/* Drag & Drop Zone */}
             <div className={styles.dropZone}>
               {selectedFile ? (
@@ -88,8 +95,8 @@ export default function UploadModal({ onUploadSuccess }) {
                   <p className={styles.orText}>or</p>
                   <label className={styles.fileInputLabel}>
                     Browse Files
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       className={styles.fileInput}
                       onChange={handleFileChange}
                       disabled={isUploading}
@@ -99,7 +106,7 @@ export default function UploadModal({ onUploadSuccess }) {
               )}
             </div>
 
-            <button 
+            <button
               className={styles.submitButton}
               onClick={handleSubmit}
               disabled={!selectedFile || isUploading}

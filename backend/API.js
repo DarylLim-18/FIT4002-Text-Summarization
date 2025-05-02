@@ -5,7 +5,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
 const cors = require('cors');
-const fs = require('fs');
+const fs = require('fs').promises;
 
 const app = express();
 const port = 3000;
@@ -28,17 +28,17 @@ db.connect((err) => {
 //swagger setup
 const swaggerOptions = {
     definition: {
-      openapi: '3.0.0',
-      info: {
-        title: 'File Upload API',
-        version: '1.0.0',
-        description: 'API for document uploads',
-      },
-      servers: [{ url: 'http://localhost:3000' }],
+        openapi: '3.0.0',
+        info: {
+            title: 'File Upload API',
+            version: '1.0.0',
+            description: 'API for document uploads',
+        },
+        servers: [{ url: 'http://localhost:3000' }],
     },
     apis: [path.join(__dirname, 'API.js')],
 };
-  
+
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 app.get('/openapi.json', (req, res) => res.json(swaggerSpec));
@@ -154,19 +154,18 @@ app.get('/download/:id', (req, res) => {
  *       404:
  *         description: File not found
  */
-app.delete('/files/:id', (req, res) => {
+app.delete('/delete/:id', (req, res) => {
     const fileId = req.params.id;
 
     // Step 1: Get the file path from DB
-    const getQuery = 'SELECT file_path FROM file WHERE file_id = ?';
+    const getQuery = 'SELECT file_name FROM file WHERE file_id = ?';
     db.query(getQuery, [fileId], (err, results) => {
         if (err) return res.status(500).send(err);
         if (results.length === 0) return res.status(404).send({ message: 'File not found' });
 
-        const filePath = results[0].file_path;
-
+        const filePath = path.join('uploads', getQuery);
         // Step 2: Delete the file from disk
-        fs.unlink(path.join(__dirname, filePath), (fsErr) => {
+        fs.unlink(filePath, (fsErr) => {
             if (fsErr && fsErr.code !== 'ENOENT') return res.status(500).send(fsErr);
 
             // Step 3: Delete from DB
