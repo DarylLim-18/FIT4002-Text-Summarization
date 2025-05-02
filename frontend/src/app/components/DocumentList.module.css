@@ -44,3 +44,46 @@
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   }
+  
+  .headerContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  
+  .actions {
+    display: flex;
+    gap: 12px;
+  }
+  
+  .sortButton, 
+  .filterButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: white;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .sortButton:hover,
+  .filterButton:hover {
+    background-color: #f3f4f6;
+  }
+  
+  .icon {
+    width: 16px;
+    height: 16px;
+  }

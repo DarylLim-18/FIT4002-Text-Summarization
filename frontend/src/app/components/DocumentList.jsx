@@ -1,6 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import styles from './DocumentList.module.css';
+import { 
+    FiFilter,
+    FiBarChart
+  } from 'react-icons/fi';
 
 export default function DocumentList() {
   const [documents, setDocuments] = useState([]);
@@ -71,7 +75,18 @@ export default function DocumentList() {
         className={styles.searchInput}
       />
 
-      <h2>Uploaded Documents</h2>
+      {/* title with sort and filter button */}
+      <div className={styles.headerContainer}>
+        <h2 className={styles.title}>Uploaded Documents</h2>
+        <div className={styles.actions}>
+            <button className={styles.sortButton}>
+            <FiBarChart className={styles.icon} /> Sort
+            </button>
+            <button className={styles.filterButton}>
+            <FiFilter className={styles.icon} /> Filter
+            </button>
+        </div>
+      </div>
 
       {loading ? (
         <p>Loading...</p>
