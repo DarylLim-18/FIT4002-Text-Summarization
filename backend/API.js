@@ -162,6 +162,53 @@ app.delete('/delete/:id', (req, res) => {
     });
 });
 
+
+//list API
+/**
+ * @swagger
+ * /files:
+ *   get:
+ *     summary: Get metadata for all uploaded files
+ *     responses:
+ *       200:
+ *         description: A list of file metadata
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   file_id:
+ *                     type: integer
+ *                   file_name:
+ *                     type: string
+ *                   file_type:
+ *                     type: string
+ *                   file_mime:
+ *                     type: string
+ *                   file_upload_date:
+ *                     type: string
+ *                   file_size:
+ *                     type: integer
+ */
+app.get('/files', (req, res) => {
+    const query = `
+        SELECT 
+            file_id, file_name, file_type, file_mime, file_upload_date, file_size
+        FROM 
+            file
+        ORDER BY 
+            file_upload_date DESC
+    `;
+
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).send(err);
+        res.json(results);
+    });
+});
+
+
 app.get('/', (req, res) => {
     res.send('Welcome to the Document Upload/Download API! Please type "/docs" at the end of the URL to go the testing interface');
 });
