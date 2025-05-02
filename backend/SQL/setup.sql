@@ -9,9 +9,9 @@ CREATE TABLE file (
     file_mime ENUM('application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain') NOT NULL,
     file_upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     file_size INT,
-    file_data LONGBLOB,
+    file_path VARCHAR(255),
     file_description TEXT,
-    file_text LONGTEXT
+    file_summary_text LONGTEXT
 );
 
 

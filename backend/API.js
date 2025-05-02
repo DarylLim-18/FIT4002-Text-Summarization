@@ -42,13 +42,13 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 app.get('/openapi.json', (req, res) => res.json(swaggerSpec));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use('/api/mistral', mistralRoutes);
+// app.use('/api/mistral', mistralRoutes);
 
 // Multer Storage Setup - what this does is it stores files temporarily in '/uploads' can be used as a cache system
 const storage = multer.diskStorage({
     destination: 'uploads/',
     filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
+        cb(null, file.originalname);
     }
 });
 
@@ -82,19 +82,23 @@ const upload = multer({ storage });
  */
 app.post('/upload', upload.single('file'), (req, res) => {
     const file = req.file;
-    const fileBuffer = fs.readFileSync(file.path);
+    if (!file) return res.status(400).send('No file uploaded.');
 
-    const sql = `INSERT INTO file (file_name, file_type, file_mime, file_size, file_data) VALUES (?, ?, ?, ?, ?)`;
-    const values = [
-        file.originalname,
-        path.extname(file.originalname).substring(1), // 'pdf', 'docx', etc.
-        file.mimetype,
-        file.size,
-        fileBuffer
-    ];
+    const fileName = file.originalname;
+    const fileType = path.extname(file.originalname).substring(1); // pdf, docx, etc.
+    const fileMime = file.mimetype;
+    const fileSize = file.size;
+    const relativePath = path.join('uploads', file.filename); // Relative path
+    const fileDescription = req.body.description || null;
+    const fileSummary = req.body.summary || null;
+
+    const sql = `
+        INSERT INTO file (file_name, file_type, file_mime, file_size, file_path, file_description, file_summary_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    const values = [fileName, fileType, fileMime, fileSize, relativePath, fileDescription, fileSummary];
 
     db.query(sql, values, (err, result) => {
-        fs.unlinkSync(file.path); // Clean up temp file
         if (err) return res.status(500).send(err);
         res.send(`File uploaded successfully with ID: ${result.insertId}`);
     });
