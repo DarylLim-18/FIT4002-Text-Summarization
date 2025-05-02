@@ -6,51 +6,63 @@ export default function DocumentList() {
   const [documents, setDocuments] = useState([]);
   const [filteredDocs, setFilteredDocs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
 
-//   const fetchDocuments = async () => {
-//     const res = await fetch('/api/documents');
-//     setDocuments(await res.json());
-//   };
 
-  // Fetch documents
+  // Fetch documents from backend
   const fetchDocuments = async () => {
-    const res = await fetch('/api/documents');
-    // const data = await res.json();
-    setDocuments(await res.json());
-    setFilteredDocs(await res.json()); // Initialize filtered list
-
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost:3000/files');
+      const data = await res.json();
+      setDocuments(data);
+      setFilteredDocs(data);
+    } catch (err) {
+      console.error('Error fetching documents:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = async (filename) => {
-    await fetch('/api/documents', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename })
-    });
-    fetchDocuments(); // Refresh list
+
+  // Delete document by filename
+  const handleDelete = async (file_id) => {
+    try {
+      const res = await fetch(`http://localhost:3000/files/${file_id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        console.error('Failed to delete:', await res.text());
+      } else {
+        console.log('File deleted');
+        fetchDocuments(); // Refresh list
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error);
+    }
   };
 
+
+  // Fetch once on mount
   useEffect(() => {
     fetchDocuments();
   }, []);
 
-// Filter documents when search term changes
-//   useEffect(() => {
-//     if (!searchTerm) {
-//       setFilteredDocs(documents); // Reset when search is empty
-//     } else {
-//       const results = documents.filter(doc => 
-//         doc.filename.toLowerCase().includes(searchTerm.toLowerCase())
-//       );
-//       setFilteredDocs(results);
-//     }
-//   }, [searchTerm, documents]);
-
+  // Search filter logic
+  useEffect(() => {
+    if (!searchTerm) {
+      setFilteredDocs(documents);
+    } else {
+      const results = documents.filter(doc =>
+        doc.file_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredDocs(results);
+    }
+  }, [searchTerm, documents]);
 
   return (
     <div className={styles.container}>
-
-        {/* Search bar */}
       <input
         type="text"
         placeholder="Search documents..."
@@ -59,36 +71,21 @@ export default function DocumentList() {
         className={styles.searchInput}
       />
 
-      
       <h2>Uploaded Documents</h2>
 
-      {/* Document list */}
-      {/* {filteredDocs.length === 0 ? (
-        <p>{documents.length === 0 ? 'Loading...' : 'No matching documents found'}</p>
+      {loading ? (
+        <p>Loading...</p>
+      ) : documents.length === 0 ? (
+        <p>No documents found</p>
+      ) : filteredDocs.length === 0 ? (
+        <p>No matching documents found</p>
       ) : (
         <ul className={styles.list}>
           {filteredDocs.map((doc) => (
-            <li key={doc._id || doc.id} className={styles.item}>
-              <span>{doc.filename}</span>
-              <button 
-                onClick={() => handleDelete(doc._id)}
-                className={styles.deleteButton}
-              >
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
-      )} */}
-      {documents.length === 0 ? (
-        <p>No documents found</p>
-      ) : (
-        <ul className={styles.list}>
-          {documents.map((doc) => (
-            <li key={doc.name} className={styles.item}>
-              <span>{doc.name}</span>
-              <button 
-                onClick={() => handleDelete(doc.name)}
+            <li key={doc.file_id} className={styles.item}>
+              <span>{doc.file_name}</span>
+              <button
+                onClick={() => handleDelete(doc.file_id)}
                 className={styles.deleteButton}
               >
                 Delete
@@ -97,6 +94,7 @@ export default function DocumentList() {
           ))}
         </ul>
       )}
+
 
     </div>
   );

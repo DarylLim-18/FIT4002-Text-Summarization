@@ -4,11 +4,12 @@ const multer = require('multer');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
+const cors = require('cors');
 const fs = require('fs');
 
 const app = express();
 const port = 3000;
-
+app.use(cors());
 
 //NOTE: THIS IS ALL SETUP DO NOT INTERFERE WITH ANY OF THIS OR ELSE IT WONT WORK
 // MySQL Connection
@@ -153,12 +154,28 @@ app.get('/download/:id', (req, res) => {
  *       404:
  *         description: File not found
  */
-app.delete('/delete/:id', (req, res) => {
+app.delete('/files/:id', (req, res) => {
     const fileId = req.params.id;
-    db.query('DELETE FROM file WHERE file_id = ?', [fileId], (err, result) => {
+
+    // Step 1: Get the file path from DB
+    const getQuery = 'SELECT file_path FROM file WHERE file_id = ?';
+    db.query(getQuery, [fileId], (err, results) => {
         if (err) return res.status(500).send(err);
-        if (result.affectedRows === 0) return res.status(404).send('File not found');
-        res.send('File deleted successfully');
+        if (results.length === 0) return res.status(404).send({ message: 'File not found' });
+
+        const filePath = results[0].file_path;
+
+        // Step 2: Delete the file from disk
+        fs.unlink(path.join(__dirname, filePath), (fsErr) => {
+            if (fsErr && fsErr.code !== 'ENOENT') return res.status(500).send(fsErr);
+
+            // Step 3: Delete from DB
+            const deleteQuery = 'DELETE FROM file WHERE file_id = ?';
+            db.query(deleteQuery, [fileId], (dbErr) => {
+                if (dbErr) return res.status(500).send(dbErr);
+                res.status(200).send({ message: 'File deleted successfully' });
+            });
+        });
     });
 });
 
