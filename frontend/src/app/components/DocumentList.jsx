@@ -32,7 +32,7 @@ export default function DocumentList() {
   // Delete document by filename
   const handleDelete = async (file_id) => {
     try {
-      const res = await fetch(`http://localhost:3000/files/${file_id}`, {
+      const res = await fetch(`http://localhost:3000/delete/${file_id}`, {
         method: 'DELETE',
       });
 
