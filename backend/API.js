@@ -42,6 +42,7 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 app.get('/openapi.json', (req, res) => res.json(swaggerSpec));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api/mistral', mistralRoutes);
 
 // Multer Storage Setup - what this does is it stores files temporarily in '/uploads' can be used as a cache system
 const storage = multer.diskStorage({
