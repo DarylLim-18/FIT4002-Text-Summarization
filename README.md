@@ -114,14 +114,6 @@ sc query MySQL80
 
 #### Terminal 2: Start Backend API
 
-**Mac/Linux:**
-```bash
-cd backend
-npm start
-# Backend runs on http://localhost:3000
-```
-
-**Windows:**
 ```bash
 cd backend
 npm start
