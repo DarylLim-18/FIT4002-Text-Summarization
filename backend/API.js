@@ -1,235 +1,212 @@
 const express = require('express');
-const mysql = require('mysql');
 const multer = require('multer');
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
+const fs = require('fs');
+const mysql = require('mysql2/promise');
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
 const cors = require('cors');
-const fs = require('fs').promises;
+const axios = require('axios');
+require('dotenv').config({ path: './backend/.env' });
+
+// Debug environment variables
+console.log('Environment variables loaded:');
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_PASS:', process.env.DB_PASS ? '[HIDDEN]' : 'undefined');
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('Current working directory:', process.cwd());
 
 const app = express();
-const port = 3000;
-app.use(cors());
 
-//NOTE: THIS IS ALL SETUP DO NOT INTERFERE WITH ANY OF THIS OR ELSE IT WONT WORK
-// MySQL Connection
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'hanikodi4002!',
-    database: 'FIT4002'
-});
+// Allow requests from localhost:3000
+app.use(cors({
+  origin: 'http://localhost:3000',
+}));
+app.use(express.json());
 
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to MySQL');
-});
+// ——— ML Service Configuration ——————————————————————————————
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8888';
 
-//swagger setup
-const swaggerOptions = {
-    definition: {
-        openapi: '3.0.0',
-        info: {
-            title: 'File Upload API',
-            version: '1.0.0',
-            description: 'API for document uploads',
-        },
-        servers: [{ url: 'http://localhost:3000' }],
-    },
-    apis: [path.join(__dirname, 'API.js')],
-};
+// Helper function to check ML service availability
+async function checkMLService() {
+  try {
+    const response = await axios.get(`${ML_SERVICE_URL}/`, { timeout: 5000 });
+    return response.status === 200;
+  } catch (error) {
+    console.warn('ML Service not available:', error.message);
+    return false;
+  }
+}
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
+// ——— Set up uploads folder & Multer with diskStorage —————————————————
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
-app.get('/openapi.json', (req, res) => res.json(swaggerSpec));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-// app.use('/api/mistral', mistralRoutes);
-
-// Multer Storage Setup - what this does is it stores files temporarily in '/uploads' can be used as a cache system
+// Preserve the original file extension on disk
 const storage = multer.diskStorage({
-    destination: 'uploads/',
-    filename: (req, file, cb) => {
-        cb(null, file.originalname);
-    }
+  destination: UPLOAD_DIR,
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname);
+    cb(null, uniqueName + ext);
+  }
 });
-
 const upload = multer({ storage });
-// END OF SETUP
 
+// Serve uploads statically (all files forced inline)
+app.use(
+  '/uploads',
+  express.static(UPLOAD_DIR, {
+    setHeaders(res) {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+  })
+);
 
-// HERE ONWARDS ARE THE API's
+// ——— MySQL Connection Pool ——————————————————————————————
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+});
 
-// Upload Route
-/**
- * @swagger
- * /upload:
- *   post:
- *     summary: Upload a file
- *     consumes:
- *       - multipart/form-data
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *     responses:
- *       200:
- *         description: File uploaded successfully
- */
-app.post('/upload', upload.single('file'), (req, res) => {
-    const file = req.file;
-    if (!file) return res.status(400).send('No file uploaded.');
+// ——— API 1: Upload & Summarize with ML Service ————————————————————————————————————
+app.post('/files/upload', upload.single('file'), async (req, res) => {
+  try {
+    const { originalname, filename, size, mimetype } = req.file;
+    const filePath = path.join(UPLOAD_DIR, filename);
 
-    const fileName = file.originalname;
-    const fileType = path.extname(file.originalname).substring(1); // pdf, docx, etc.
-    const fileMime = file.mimetype;
-    const fileSize = file.size;
-    const relativePath = path.join('uploads', file.filename); // Relative path
-    const fileDescription = req.body.description || null;
-    const fileSummary = req.body.summary || null;
+    if (size > 10 * 1024 * 1024) { // 10MB limit
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+    }
 
-    const sql = `
-        INSERT INTO file (file_name, file_type, file_mime, file_size, file_path, file_description, file_summary_text)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
-    const values = [fileName, fileType, fileMime, fileSize, relativePath, fileDescription, fileSummary];
+    // 1) Extract text based on type
+    let text = '';
+    try {
+      if (mimetype === 'text/plain') {
+        text = fs.readFileSync(filePath, 'utf8');
+      } else if (mimetype === 'application/pdf') {
+        const data = await pdfParse(fs.readFileSync(filePath));
+        text = data.text;
+      } else if (
+        mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        const { value } = await mammoth.extractRawText({ path: filePath });
+        text = value;
+      } else {
+        fs.unlinkSync(filePath);
+        return res.status(400).json({ error: 'Unsupported file type' });
+      }
+    } catch (extractError) {
+      console.error('Text extraction failed:', extractError);
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ error: 'Failed to extract text from file' });
+    }
 
-    db.query(sql, values, (err, result) => {
-        if (err) return res.status(500).send(err);
-        res.send(`File uploaded successfully with ID: ${result.insertId}`);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// ——— API 3: List all metadata ————————————————————————————————————
+app.get('/files', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM files ORDER BY upload_date DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to list files' });
+  }
+});
+
+// ——— API 4: Delete file & metadata & ML Service entries ——————————————————————————————————
+app.delete('/files/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // 1) Find the record
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+
+    const { file_path } = rows[0];
+    const fullPath = path.join(UPLOAD_DIR, file_path);
+
+    // 3) Delete DB row
+    await pool.execute('DELETE FROM files WHERE id = ?', [id]);
+
+    // 4) Delete the file from disk
+    fs.unlink(fullPath, (err) => {
+      if (err) console.warn('Failed to delete file:', err);
     });
+
+    res.status(204).end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Delete failed' });
+  }
 });
 
-// Download Route
-/**
- * @swagger
- * /download/{id}:
- *   get:
- *     summary: Download a file by ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: File downloaded successfully
- *       404:
- *         description: File not found
- */
-app.get('/download/:id', (req, res) => {
-    const fileId = req.params.id;
-    db.query('SELECT * FROM file WHERE file_id = ?', [fileId], (err, results) => {
-        if (err) return res.status(500).send(err);
-        if (results.length === 0) return res.status(404).send('File not found');
+// ——— API 2: Get metadata by ID ————————————————————————————————————
+app.get('/files/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
 
-        const file = results[0];
-        res.setHeader('Content-Type', file.file_mime);
-        res.setHeader('Content-Disposition', `attachment; filename=${file.file_name}`);
-        res.send(file.file_data);
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [id]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const {
+      file_name,
+      file_path,
+      file_size,
+      file_type,
+      file_summary,
+      upload_date,
+    } = rows[0];
+
+    const diskPath = path.join(UPLOAD_DIR, file_path);
+    const file_url = `http://localhost:4000/uploads/${file_path}`;
+
+    let content = '';
+    let contentHTML = '';
+
+    if (file_type === 'text/plain') {
+      content = fs.readFileSync(diskPath, 'utf8');
+    } else if (file_type === 'application/pdf') {
+      // Client will embed via file_url
+    } else if (file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const { value } = await mammoth.convertToHtml({ path: diskPath });
+      contentHTML = value;
+    }
+
+    res.json({
+      id,
+      file_name,
+      file_size,
+      file_type,
+      file_summary,
+      upload_date,
+      file_url,
+      content,
+      contentHTML,
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to get file' });
+  }
 });
 
-// Delete by ID
-/**
- * @swagger
- * /delete/{id}:
- *   delete:
- *     summary: Delete a file by ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: File deleted successfully
- *       404:
- *         description: File not found
- */
-app.delete('/delete/:id', (req, res) => {
-    const fileId = req.params.id;
-
-    // Step 1: Get the file path from DB
-    const getQuery = 'SELECT file_name FROM file WHERE file_id = ?';
-    db.query(getQuery, [fileId], (err, results) => {
-        if (err) return res.status(500).send(err);
-        if (results.length === 0) return res.status(404).send({ message: 'File not found' });
-
-        const filePath = path.join('uploads', getQuery);
-        // Step 2: Delete the file from disk
-        fs.unlink(filePath, (fsErr) => {
-            if (fsErr && fsErr.code !== 'ENOENT') return res.status(500).send(fsErr);
-
-            // Step 3: Delete from DB
-            const deleteQuery = 'DELETE FROM file WHERE file_id = ?';
-            db.query(deleteQuery, [fileId], (dbErr) => {
-                if (dbErr) return res.status(500).send(dbErr);
-                res.status(200).send({ message: 'File deleted successfully' });
-            });
-        });
-    });
-});
-
-
-//list API
-/**
- * @swagger
- * /files:
- *   get:
- *     summary: Get metadata for all uploaded files
- *     responses:
- *       200:
- *         description: A list of file metadata
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   file_id:
- *                     type: integer
- *                   file_name:
- *                     type: string
- *                   file_type:
- *                     type: string
- *                   file_mime:
- *                     type: string
- *                   file_upload_date:
- *                     type: string
- *                   file_size:
- *                     type: integer
- */
-app.get('/files', (req, res) => {
-    const query = `
-        SELECT 
-            file_id, file_name, file_type, file_mime, file_upload_date, file_size
-        FROM 
-            file
-        ORDER BY 
-            file_upload_date DESC
-    `;
-
-    db.query(query, (err, results) => {
-        if (err) return res.status(500).send(err);
-        res.json(results);
-    });
-});
-
-
-app.get('/', (req, res) => {
-    res.send('Welcome to the Document Upload/Download API! Please type "/docs" at the end of the URL to go the testing interface');
-});
-
-// Start server
-app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+// ——— Start Server ——————————————————————————————————————————
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
 });
