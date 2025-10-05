@@ -1,0 +1,89 @@
+.container {
+    margin-top: 32px;
+    color: black;
+  }
+  
+  .list {
+    list-style: none;
+    padding: 0;
+  }
+  
+  .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .deleteButton {
+    background-color: #ef4444;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .deleteButton:hover {
+    background-color: #dc2626;
+  }
+
+  .searchInput {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    /* background-color: white; */
+  }
+  
+  .searchInput:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+  
+  .headerContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  
+  .actions {
+    display: flex;
+    gap: 12px;
+  }
+  
+  .sortButton, 
+  .filterButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: white;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .sortButton:hover,
+  .filterButton:hover {
+    background-color: #f3f4f6;
+  }
+  
+  .icon {
+    width: 16px;
+    height: 16px;
+  }
