@@ -74,6 +74,58 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
+pool.execute('SELECT 1').then(() => {
+  console.log('✅ Database connected successfully');
+}).catch(err => {
+  console.error('❌ Database connection failed:', err.message);
+});
+
+// ——— Helper Functions ——————————————————————————————————————
+async function getSummary(text) {
+  try {
+    const response = await axios.post(`${ML_SERVICE_URL}/summarize`, {
+      text: text.substring(0, 5000), // Limit text length
+      max_length: 150,
+      temperature: 0.3
+    }, { timeout: 30000 });
+    
+    return response.data.summary;
+  } catch (error) {
+    console.error('ML Service summarization failed:', error.message);
+    // Fallback summary
+    const wordCount = text.split(' ').length;
+    return `Document uploaded successfully. Contains approximately ${wordCount} words.`;
+  }
+}
+
+async function getEmbedding(text) {
+  try {
+    const response = await axios.post(`${ML_SERVICE_URL}/embed`, {
+      text: text.substring(0, 1000) // Limit text length for embedding
+    }, { timeout: 15000 });
+    
+    return response.data.embedding;
+  } catch (error) {
+    console.error('ML Service embedding failed:', error.message);
+    throw error;
+  }
+}
+
+async function searchSimilarDocuments(query, nResults = 5, filters = null) {
+  try {
+    const response = await axios.post(`${ML_SERVICE_URL}/search`, {
+      query,
+      n_results: nResults,
+      filters
+    }, { timeout: 15000 });
+    
+    return response.data.results;
+  } catch (error) {
+    console.error('ML Service search failed:', error.message);
+    throw error;
+  }
+}
+
 // ——— API 1: Upload & Summarize with ML Service ————————————————————————————————————
 app.post('/files/upload', upload.single('file'), async (req, res) => {
   try {
@@ -150,6 +202,37 @@ app.delete('/files/:id', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// ——— API 5: Traditional Search ——————————————————————————————————
+app.get('/files/search', async (req, res) => {
+  try {
+    const { q = '', type = 'all' } = req.query;
+    const searchTerm = `%${q}%`;
+
+    sql = `
+      SELECT id, file_name, file_path, file_size, file_type, file_summary, upload_date
+      FROM files
+      WHERE (file_name LIKE ? OR file_summary LIKE ? OR file_content LIKE ?)
+    `;
+    let params = [searchTerm, searchTerm, searchTerm];
+
+    if (type === 'pdf') {
+      sql += ` AND file_type = 'application/pdf'`;
+    } else if (type === 'docx') {
+      sql += ` AND file_type LIKE '%wordprocessingml%'`;
+    } else if (type === 'txt') {
+      sql += ` AND file_type = 'text/plain'`;
+    }
+
+    sql += ` ORDER BY upload_date DESC`;
+
+    const [rows] = await pool.execute(sql, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ error: 'Search failed' });
   }
 });
 
