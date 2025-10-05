@@ -5,7 +5,7 @@ This is the machine learning microservice for the Document Manager application. 
 ## 🛠 Technologies
 
 - **Framework**: FastAPI with Python 3.8+
-- **LLM**: Ollama (llama3.2:1b model)
+- **LLM**: Ollama (mistral model)
 - **Vector Database**: ChromaDB for embeddings and semantic search
 - **Dependencies**: See [`requirements.txt`](requirements.txt)
 
@@ -31,7 +31,7 @@ Create a `.env` file in the `ml-service` directory:
 ```dotenv
 # Ollama Configuration
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2:1b
+OLLAMA_MODEL=mistral
 
 # ChromaDB Configuration
 CHROMA_PERSIST_DIRECTORY=./chroma_db
@@ -51,7 +51,7 @@ Install and start Ollama service:
 ollama serve
 
 # In another terminal, pull the required model
-ollama pull llama3.2:1b
+ollama pull mistral
 ```
 
 ### 4. Start the ML Service
@@ -110,8 +110,6 @@ You can change the model by updating the `.env` file:
 
 ```dotenv
 OLLAMA_MODEL=mistral        # Default Mistral model
-OLLAMA_MODEL=llama3.2:1b    # Llama 3.2 1B (recommended)
-OLLAMA_MODEL=llama3.2:3b    # Llama 3.2 3B (more capable)
 ```
 
 ### ChromaDB Storage
@@ -147,7 +145,7 @@ export OLLAMA_GPU=1
 2. **Model not found**
    ```bash
    # Pull the required model
-   ollama pull llama3.2:1b
+   ollama pull mistral
    ```
 
 3. **Port already in use**
