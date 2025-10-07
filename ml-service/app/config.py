@@ -1,20 +1,4 @@
 from pydantic_settings import BaseSettings
-<<<<<<< HEAD
-import os
-from typing import Optional
-
-class Settings(BaseSettings):
-    # Model settings
-    model_path: str = "mistralai/Mistral-7B-Instruct-v0.2"
-
-    # Uncomment for Windows CUDA support
-    device: str = "cuda" if os.environ.get("USE_CPU") != "1" else "cpu"
-    quantize: bool = True
-
-    # Uncomment for CPU support
-    # device: str = "cpu"
-    # quantize: bool = False
-=======
 from typing import Optional
 
 class Settings(BaseSettings):
@@ -25,7 +9,6 @@ class Settings(BaseSettings):
     # ChromaDB settings
     chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "documents"
->>>>>>> 936e198 (Implement ML Service and update API.js)
     
     # Server settings
     host: str = "0.0.0.0"
