@@ -211,4 +211,8 @@ Modify [`services/ollama_service.py`](services/ollama_service.py) to use differe
 
 - The service runs on `0.0.0.0` by default for Docker compatibility
 - In production, consider using authentication middleware
+<<<<<<< HEAD
 - ChromaDB data contains document content - secure the `chroma_db/` directory
+=======
+- ChromaDB data contains document content - secure the `chroma_db/` directory
+>>>>>>> 936e198 (Implement ML Service and update API.js)

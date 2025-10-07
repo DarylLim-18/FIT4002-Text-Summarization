@@ -1,5 +1,6 @@
 .vscode/settings.json
 /uploads
+<<<<<<< HEAD
 
 # Virtual environments
 venv/
@@ -98,3 +99,8 @@ yarn-debug.log*
 yarn-error.log*
 .next/
 out/
+=======
+/node_modules
+/venv
+/backend/uploads
+>>>>>>> 936e198 (Implement ML Service and update API.js)
