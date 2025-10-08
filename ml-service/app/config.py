@@ -1,12 +1,14 @@
-from pydantic import BaseSettings
-import os
+from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
-    # Model settings
-    model_path: str = "mistralai/Mistral-7B-Instruct-v0.2"
-    device: str = "cuda" if os.environ.get("USE_CPU") != "1" else "cpu"
-    quantize: bool = True
+    # Ollama settings
+    ollama_host: str = "http://localhost:11434"
+    ollama_model: str = "mistral"
+    
+    # ChromaDB settings
+    chroma_persist_directory: str = "./chroma_db"
+    chroma_collection_name: str = "documents"
     
     # Server settings
     host: str = "0.0.0.0"
@@ -20,4 +22,6 @@ class Settings(BaseSettings):
     cache_size: int = 1000  # number of items
     
     class Config:
-        env_prefix = "MISTRAL_"
+        env_prefix = "ML_SERVICE_"
+
+settings = Settings()

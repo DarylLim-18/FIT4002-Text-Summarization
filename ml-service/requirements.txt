@@ -1,8 +1,7 @@
-torch>=2.0.0
-transformers>=4.30.0
-accelerate>=0.20.0
-bitsandbytes>=0.41.0
-fastapi>=0.95.0
-uvicorn>=0.22.0
-pydantic>=2.0.0
-sentence-transformers>=2.2.2
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic-settings==2.0.3
+requests==2.31.0
+chromadb==0.4.15
+ollama==0.1.7
+python-multipart==0.0.6
