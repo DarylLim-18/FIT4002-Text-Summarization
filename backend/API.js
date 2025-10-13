@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -7,7 +7,7 @@ const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const cors = require('cors');
 const axios = require('axios');
-require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 // Debug environment variables
 console.log('Environment variables loaded:');
@@ -17,11 +17,32 @@ console.log('DB_PASS:', process.env.DB_PASS ? '[HIDDEN]' : 'undefined');
 console.log('DB_NAME:', process.env.DB_NAME);
 console.log('Current working directory:', process.cwd());
 
+
+const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
+const PUBLIC_BACKEND_URL = (process.env.PUBLIC_BACKEND_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+if (allowedOrigins.length === 0) {
+  allowedOrigins.push('http://localhost:3000');
+}
+
 const app = express();
 
-// Allow requests from localhost:3000
+// Allow requests from configured origins
+
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`Blocked CORS origin: ${origin}`);
+      callback(null, false);
+    }
+  },
 }));
 app.use(express.json());
 
@@ -174,7 +195,7 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
       `INSERT INTO files 
         (file_name, file_path, file_size, file_type, file_summary, file_content)
       VALUES (?, ?, ?, ?, ?, ?)`,
-      [originalname, filename, size, mimetype, summary, text]
+      [originalname, filename, size, mimetype, summary, text.substring(0, 10000)]
     );
 
     const newId = result.insertId;
@@ -231,7 +252,7 @@ app.delete('/files/:id', async (req, res) => {
     const { file_path } = rows[0];
     const fullPath = path.join(UPLOAD_DIR, file_path);
 
-    // 2) Delete from ML Service vector database first
+    // 2) Delete from ML Service vector database
     try {
       await axios.delete(`${ML_SERVICE_URL}/documents/file_${id}`, { timeout: 10000 });
       console.log(`✅ Deleted file ${id} from ML Service vector database`);
@@ -239,23 +260,17 @@ app.delete('/files/:id', async (req, res) => {
       console.warn(`⚠️ Failed to delete file ${id} from ML Service:`, mlError.message);
     }
 
-    // 3) Delete DB row before file deletion
+    // 3) Delete DB row
     await pool.execute('DELETE FROM files WHERE id = ?', [id]);
 
-    // 4) Delete the file from disk safely
-    try {
-      if (fs.existsSync(fullPath)) {
-        await fs.promises.unlink(fullPath);
-        console.log(`✅ Deleted file from disk: ${file_path}`);
-      }
-    } catch (fileError) {
-      console.warn('Failed to delete file from disk:', fileError.message);
-      // Don't fail the request if file deletion fails
-    }
+    // 4) Delete the file from disk
+    fs.unlink(fullPath, (err) => {
+      if (err) console.warn('Failed to delete file:', err);
+    });
 
     res.status(204).end();
   } catch (error) {
-    console.error('Delete error:', error);
+    console.error(error);
     res.status(500).json({ error: 'Delete failed' });
   }
 });
@@ -362,7 +377,7 @@ app.post('/files/context-search', async (req, res) => {
         const mlResult = mlResults.find(r => r.metadata?.file_id === fileData.id);
         return {
           ...fileData,
-          file_url: `http://localhost:4000/uploads/${fileData.file_path}`,
+          file_url: `${PUBLIC_BACKEND_URL}/uploads/${fileData.file_path}`,
           similarity_score: mlResult ? (1 - mlResult.distance) : 0,
           matched_text: mlResult ? mlResult.document.substring(0, 150) + '...' : ''
         };
@@ -410,7 +425,7 @@ app.get('/files/:id', async (req, res) => {
     } = rows[0];
 
     const diskPath = path.join(UPLOAD_DIR, file_path);
-    const file_url = `http://localhost:4000/uploads/${file_path}`;
+    const file_url = `${PUBLIC_BACKEND_URL}/uploads/${file_path}`;
 
     let content = '';
     let contentHTML = '';
@@ -441,9 +456,14 @@ app.get('/files/:id', async (req, res) => {
   }
 });
 
-// ——— Start Server ——————————————————————————————————————————
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
-});
+// --- Start Server -----------------------------------------------------------------------------
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, HOST, () => {
+    console.log(`Server running on ${PUBLIC_BACKEND_URL}`);
+    console.log(`Listening on ${HOST}:${PORT}`);
+    console.log(`Upload directory: ${UPLOAD_DIR}`);
+  });
+}
+
+module.exports = app;

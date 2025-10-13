@@ -7,7 +7,7 @@ import { useDropzone } from 'react-dropzone'
 import { FaCloudUploadAlt } from 'react-icons/fa'
 import Notification from './Notification'
 
-export default function UploadDropzone() {
+export default function UploadDropzone({ onUploaded = () => {} }) {
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState(null)
@@ -25,7 +25,7 @@ export default function UploadDropzone() {
 
     try {
       const { data } = await axios.post(
-        'http://localhost:4000/files/upload',
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/files/upload`,
         form,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       )
@@ -36,13 +36,14 @@ export default function UploadDropzone() {
 
       // refresh your list
       router.refresh()
+      onUploaded(data)
     } catch (e) {
       console.error(e)
       setError('Upload failed. Please try again.')
     } finally {
       setIsProcessing(false)
     }
-  }, [router])
+  }, [router, onUploaded])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -81,7 +82,7 @@ export default function UploadDropzone() {
         {isProcessing ? (
           <div className="flex flex-col items-center space-y-2">
             <div className="h-8 w-8 border-4 border-t-4 border-t-transparent border-blue-500 rounded-full animate-spin" />
-            <span className="text-blue-400">Processing…</span>
+            <span className="text-blue-400">Processing...</span>
           </div>
         ) : (
           <>
@@ -95,3 +96,4 @@ export default function UploadDropzone() {
     </>
   )
 }
+

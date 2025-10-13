@@ -1,12 +1,12 @@
 # FIT4002-Text-Summarization
 
-An AI-powered document processing and search system built with Next.js, Node.js, and Python. Features semantic search, document processing, and AI-enhanced search capabilities using Mistral 7B.
+An AI-powered document processing and search system built with Next.js, Node.js, and Python. Features semantic search, document processing, and AI-enhanced search capabilities powered by Mistral 7B.
 
 ## System Architecture
 
 - **Frontend**: Next.js React application
 - **Backend**: Node.js/Express API server with MySQL database
-- **ML Service**: Python FastAPI service with Mistral 7B model
+- **ML Service**: Python FastAPI service integrated with Mistral 7B via Ollama
 - **Vector Database**: ChromaDB for semantic search
 - **File Storage**: Local file system
 
@@ -16,15 +16,16 @@ An AI-powered document processing and search system built with Next.js, Node.js,
 - **Python** (v3.8 or higher)
 - **MySQL** (v8.0 or higher)
 - **Git**
+- **Ollama CLI** (for hosting the Mistral models)
 
 ## Project Structure
 
 ```
 FIT4002-Text-Summarization/
-├── frontend/          # Next.js React application
-├── backend/           # Node.js API server
-├── ml-service/        # Python ML service with Mistral
-└── README.md
+|-- frontend/          # Next.js React application
+|-- backend/           # Node.js API server
+|-- ml-service/        # Python ML service with Mistral
+`-- README.md
 ```
 
 ## Setup Instructions
@@ -36,129 +37,110 @@ git clone https://github.com/your-repo/FIT4002-Text-Summarization.git
 cd FIT4002-Text-Summarization
 ```
 
-### 2. Database Setup
+### 2. Backend Setup
 
-#### Install and Configure MySQL (Hani pls add here)
+1. Install MySQL and configure your username and password (examples assume the default `root` user).
+2. From the project root, initialize the database schema:
+   ```bash
+   mysql -u <your-user> -p < backend/setup.sql
+   ```
+3. Create `backend/.env` with:
+   ```env
+   PORT=4000
 
+   DB_HOST=localhost
+   DB_USER=root
+   DB_PASS=hanikodi4002!
+   DB_NAME=FIT4002
 
-### 3. Backend Setup
+   ML_SERVICE_URL=http://localhost:8000
+   CHROMA_PATH=http://localhost:8001
+   CHROMA_COLLECTION=documents
+   HOST=0.0.0.0
+   PUBLIC_BACKEND_URL=http://192.168.0.109:4000
+   CORS_ALLOWED_ORIGINS=http://localhost:3000,http://192.168.0.109:3000
+   ```
+4. Install the required Node dependencies from the project root:
+   ```bash
+   npm install
+   npm install pdf-parse mammoth dotenv --save
+   ```
+5. Start the API from the backend directory:
+   ```bash
+   cd backend
+   npm install   # if npm reports no package.json, you can skip this step
+   node API.js
+   ```
 
-```bash
-# After ensuring mysql is running and setup
-cd backend
-npm install express mysql2 multer axios cors swagger-jsdoc swagger-ui-express
-```
+### 3. Frontend Setup
 
-### 4. ML Service Setup
+1. Install Node.js and make sure `node` and `npm` are available in `PATH`.
+2. Create `frontend/.env` with:
+   ```env
+   NEXT_PUBLIC_API_BASE_URL=http://192.168.0.109:4000
+   ```
+3. Install dependencies and start the development server:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   The Next.js dev server runs on `http://localhost:3000` by default (use `-p 3001` if 3000 is occupied).
 
-**Mac/Linux:**
-```bash
-cd ../ml-service
+### 4. ML-Service Setup
 
-# Create Python virtual environment
-python3 -m venv venv
+1. Ensure Python and pip are installed and available in `PATH` (during Python installation, select "Install pip" and "Add python.exe to PATH").
+2. Create `ml-service/.env` with:
+   ```env
+   # Ollama Configuration
+   ML_SERVICE_OLLAMA_HOST=http://localhost:11434
+   ML_SERVICE_OLLAMA_MODEL=mistral
 
-# Activate virtual environment
-source venv/bin/activate
+   # ChromaDB Configuration
+   ML_SERVICE_CHROMA_PERSIST_DIRECTORY=./chroma_db
+   ML_SERVICE_CHROMA_COLLECTION_NAME=documents
 
-# Install Python dependencies
-pip install -r requirements.txt
-```
+   # Server Configuration
+   ML_SERVICE_HOST=0.0.0.0
+   ML_SERVICE_PORT=8000
 
-**Windows:**
-```bash
-cd ../ml-service
-
-# Create Python virtual environment
-python -m venv venv
-
-# Activate virtual environment
-venv\Scripts\activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-```
-
-### 5. Frontend Setup
-
-```bash
-cd ../frontend
-npm install
-```
+   # Performance Settings
+   ML_SERVICE_RATE_LIMIT=5
+   ML_SERVICE_ENABLE_CACHE=true
+   ML_SERVICE_CACHE_SIZE=1000
+   ```
+3. Install dependencies, provision the Ollama models, and start the ML service:
+   ```bash
+   cd ml-service
+   pip install -r requirements.txt
+   winget install Ollama.Ollama
+   ollama pull mistral
+   ollama pull nomic-embed-text
+   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
 
 ## Running the Application
 
-### Start All Services
+To run the full stack, start each service in its own terminal after completing the setup steps:
 
-You need to run **4 services simultaneously**. Open **4 separate terminal windows**:
-
-#### Terminal 1: Start MySQL
-
-**Mac:**
-```bash
-# Ensure MySQL is running
-brew services start mysql
-
-# Check if running
-brew services list | grep mysql
-```
-
-**Windows:**
-```bash
-# Start MySQL service
-net start MySQL80
-
-# Check if running
-sc query MySQL80
-```
-
-#### Terminal 2: Start Backend API
-
-```bash
-cd backend
-npm start
-# Backend runs on http://localhost:3000
-```
-
-#### Terminal 3: Start ML Service
-
-**Mac/Linux:**
-```bash
-cd ml-service
-source venv/bin/activate  # Activate virtual environment
-python -m app.main
-# ML Service runs on http://localhost:8000
-```
-
-**Windows:**
-```bash
-cd ml-service
-venv\Scripts\activate  # Activate virtual environment
-python -m app.main
-# ML Service runs on http://localhost:8000
-```
-
-#### Terminal 4: Start Frontend
-
-```bash
-cd frontend
-npm run dev
-# Frontend runs on http://localhost:3001
-```
+1. **MySQL** - ensure the MySQL server is running.
+2. **Backend API** - from `backend/`, run `node API.js` (listens on `http://localhost:4000`).
+3. **ML Service** - from `ml-service/`, run `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+4. **Frontend** - from `frontend/`, run `npm run dev` (Next.js dev server on `http://localhost:3000` by default).
 
 ## Usage
 
 ### 1. Upload Documents
 
-- Navigate to `http://localhost:3001`
-- Use the upload interface to upload PDF, DOCX, or TXT files
+- Navigate to `http://localhost:3000`
+- Use the upload interface to submit PDF, DOCX, or TXT files
 - Files are processed automatically and stored in the vector database
 
 ### 2. Search Documents
 
 #### Basic Search
 ```bash
-curl -X POST "http://localhost:3000/search" \
+curl -X POST "http://localhost:4000/search" \
   -H "Content-Type: application/json" \
   -d '{"query": "your search query", "n_results": 3}'
 ```
@@ -166,19 +148,19 @@ curl -X POST "http://localhost:3000/search" \
 #### AI-Enhanced Search
 ```bash
 # Smart search with AI enhancement
-curl -X POST "http://localhost:3000/smart-search" \
+curl -X POST "http://localhost:4000/smart-search" \
   -H "Content-Type: application/json" \
   -d '{"query": "your search query", "n_results": 3}'
 
 # Deep search with full AI features
-curl -X POST "http://localhost:3000/deep-search" \
+curl -X POST "http://localhost:4000/deep-search" \
   -H "Content-Type: application/json" \
   -d '{"query": "your search query", "n_results": 3}'
 ```
 
 ## API Endpoints
 
-### Backend API (Port 3000)
+### Backend API (Port 4000)
 
 - `POST /upload` - Upload documents
 - `GET /files` - List all files
@@ -196,30 +178,23 @@ curl -X POST "http://localhost:3000/deep-search" \
 - `POST /search-documents` - Vector similarity search
 - `GET /vector-db-status` - Check vector database status
 
-### Testing the Setup
+## Testing the Setup
 
-#### 1. Test Backend
-```bash
-curl http://localhost:3000/files
-```
-
-#### 2. Test ML Service
-```bash
-curl http://localhost:8000/
-```
-
-#### 3. Test Vector Database
-```bash
-curl http://localhost:8000/vector-db-status
-```
-
-#### 4. Test Search Flow
-
-**Search for content:**
-```bash
-curl -X POST "http://localhost:3000/search" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "test", "n_results": 3}'
-```
-
----
+1. **Test Backend**
+   ```bash
+   curl http://localhost:4000/files
+   ```
+2. **Test ML Service**
+   ```bash
+   curl http://localhost:8000/
+   ```
+3. **Test Vector Database**
+   ```bash
+   curl http://localhost:8000/vector-db-status
+   ```
+4. **Test Search Flow**
+   ```bash
+   curl -X POST "http://localhost:4000/search" \
+     -H "Content-Type: application/json" \
+     -d '{"query": "test", "n_results": 3}'
+   ```

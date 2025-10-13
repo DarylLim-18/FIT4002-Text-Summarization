@@ -5,7 +5,8 @@ import { FiEye, FiTrash2 } from 'react-icons/fi'
 
 const formatSize = bytes => {
   if (bytes < 1024) return `${bytes} B`
-  return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export default function FileListItem({ document, onView, onDelete }) {

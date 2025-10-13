@@ -6,7 +6,7 @@ import FileListItem from './FileListItem'
 import Notification from './Notification'
 import DeleteConfirmModal from './DeleteConfirmModal'
 
-export default function RecentFiles({ onView }) {
+export default function RecentFiles({ onView, refreshKey = 0 }) {
   const [files, setFiles] = useState([])
   const [error, setError] = useState(null)
   const [notif, setNotif] = useState(null)
@@ -17,16 +17,27 @@ export default function RecentFiles({ onView }) {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [toDelete, setToDelete] = useState({ id: null, name: '' })
 
-  useEffect(() => { fetchFiles() }, [])
+  useEffect(() => {
+    let cancelled = false
 
-  const fetchFiles = async () => {
-    try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/files`)
-      setFiles(res.data)
-    } catch {
-      setError('Failed to load files')
+    const load = async () => {
+      try {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/files`)
+        if (!cancelled) {
+          setFiles(res.data)
+          setError(null)
+        }
+      } catch {
+        if (!cancelled) setError('Failed to load files')
+      }
     }
-  }
+
+    load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [refreshKey])
 
   const askDelete = (id, name) => {
     setToDelete({ id, name })

@@ -79,6 +79,7 @@ function SortToggle({ order, onToggle }) {
 //Page
 export default function DocumentsPage() {
   const [files, setFiles] = useState([])
+  const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [viewDoc, setViewDoc] = useState(null)
   const [searchBy, setSearchBy] = useState('content')
@@ -95,13 +96,51 @@ export default function DocumentsPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null)
 
   useEffect(() => {
-    const params = { q: query, type: fileType, search_by: searchBy }
-    axios
-      .get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/files/search`, { params })
-      .then((res) => {
-        setFiles(sortOrder === 'asc' ? res.data.slice().reverse() : res.data)
-      })
-      .catch(() => setError('Search failed'))
+    const performSearch = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        let response;
+        
+        if (searchBy === 'context' && query.trim()) {
+          // Use context search endpoint with ML service
+          const fileTypeMapping = {
+            'pdf': 'application/pdf',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'txt': 'text/plain',
+            'all': null
+          };
+
+          response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/files/context-search`, {
+            query: query,
+            n_results: 20,
+            file_type_filter: fileTypeMapping[fileType]
+          });
+
+          // Context search returns results in a different format
+          const contextResults = response.data.results || [];
+          setFiles(sortOrder === 'asc' ? contextResults.slice().reverse() : contextResults);
+        } else {
+          // Use traditional search endpoint
+          const params = { q: query, type: fileType };
+          response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/files/search`, { params });
+          setFiles(sortOrder === 'asc' ? response.data.slice().reverse() : response.data);
+        }
+      } catch (err) {
+        console.error('Search failed:', err);
+        if (searchBy === 'context') {
+          setError('Context search failed. Make sure the ML service is running.');
+        } else {
+          setError('Search failed');
+        }
+        setFiles([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    performSearch();
   }, [query, fileType, sortOrder, searchBy])
 
   const handleView = async (docMeta) => {
@@ -155,6 +194,7 @@ export default function DocumentsPage() {
         />
       )}
       {error && <p className="text-red-400">{error}</p>}
+      {loading && <p className="text-blue-400">Loading...</p>}
 
       <SearchBar
         value={query}
