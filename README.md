@@ -49,9 +49,9 @@ cd FIT4002-Text-Summarization
    PORT=4000
 
    DB_HOST=localhost
-   DB_USER=root
-   DB_PASS=hanikodi4002!
-   DB_NAME=FIT4002
+   DB_USER=(your username)
+   DB_PASS=(your password)
+   DB_NAME=(your db name)
 
    ML_SERVICE_URL=http://localhost:8000
    CHROMA_PATH=http://localhost:8001
