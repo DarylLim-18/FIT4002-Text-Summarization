@@ -5,9 +5,9 @@ An AI-powered document processing and search system built with Next.js, Node.js,
 ## Team
 - **Hanideepu Kodi    (33560625)**: Product Manager
 - **Daryl Lim         (33560757)**: Backend Engineer
-- **Ammar Sirraj      (33187762)**: Machine Learning Engineer 
 - **Chong Jet Shen    (33517495)**: Frontend Engineer
 - **Nicholas Yew      (33642478)**: Q&A Test Engineer
+- **Ammar Sirraj      (33187762)**: Machine Learning Engineer 
 
 
 ## System Architecture
