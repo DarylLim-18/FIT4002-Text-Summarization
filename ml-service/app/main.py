@@ -152,7 +152,7 @@ async def summarize_text(request: SummarizationRequest):
         start_time = time.time()
 
         prompt = f"Summarize the following document:\n\n{request.text}\n\nSummary:"
-        system_prompt = "You are a professional document summarizer. Create a concise, clear summary that in 50 words that captures the purpose of the document and its main points."
+        system_prompt = "You are a professional document summarizer. Create a concise, clear summary that in 50 words that captures the purpose of the document and its main points. DO NOT EXCEED 50 WORDS"
         
         # Generate summary
         summary = ollama_service.generate(

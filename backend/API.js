@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const mysql = require('mysql2/promise');
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const mammoth = require('mammoth');
 const cors = require('cors');
 const axios = require('axios');
@@ -164,8 +164,15 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
       if (mimetype === 'text/plain') {
         text = fs.readFileSync(filePath, 'utf8');
       } else if (mimetype === 'application/pdf') {
-        const data = await pdfParse(fs.readFileSync(filePath));
-        text = data.text;
+        const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+        try {
+          const result = await parser.getText();
+          text = result.text;
+        } finally {
+          await parser.destroy().catch(cleanupError => {
+            console.warn('PDF parser cleanup failed:', cleanupError.message);
+          });
+        }
       } else if (
         mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ) {
@@ -181,14 +188,9 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Failed to extract text from file' });
     }
 
-    // 2) Summarize with ML Service
-    let summary = '';
-    if (text.trim()) {
-      summary = await getSummary(text);
-      console.log('✅ Generated summary with ML Service');
-    } else {
-      summary = 'Empty document or text extraction failed.';
-    }
+    // 2) Summarize with ML Service (async) & prepare initial summary placeholder
+    const hasText = text.trim().length > 0;
+    let summary = hasText ? null : 'Empty document or text extraction failed.';
 
     // 3) Store metadata + content in DB
     const [result] = await pool.execute(
@@ -201,8 +203,25 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
     const newId = result.insertId;
     const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [newId]);
     
+    if (hasText) {
+      setImmediate(() => {
+        (async () => {
+          const generatedSummary = await getSummary(text);
+          await pool.execute('UPDATE files SET file_summary = ? WHERE id = ?', [generatedSummary, newId]);
+          console.log(`✅ Generated summary with ML Service (async) for file ${newId}`);
+        })().catch(async err => {
+          console.error(`❌ Async summary generation failed for file ${newId}:`, err.message);
+          try {
+            await pool.execute('UPDATE files SET file_summary = ? WHERE id = ?', ['Summary generation failed.', newId]);
+          } catch (dbError) {
+            console.error(`❌ Failed to persist summary failure message for file ${newId}:`, dbError.message);
+          }
+        });
+      });
+    }
+
     // 4) Add to ML Service vector database in background
-    if (text.trim()) {
+    if (hasText) {
       setImmediate(async () => {
         try {
           await axios.post(`${ML_SERVICE_URL}/documents`, {
