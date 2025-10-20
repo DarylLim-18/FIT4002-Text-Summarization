@@ -2,6 +2,13 @@
 
 An AI-powered document processing and search system built with Next.js, Node.js, and Python. Features semantic search, document processing, and AI-enhanced search capabilities powered by Mistral 7B.
 
+## Team
+- **Hanideepu Kodi(33560625)**: Product Manager
+- **Daryl Lim(33560625)**: Backend Developer
+- **Ammar Sirraj(33560625)**: Machine Learning Engineer
+- **Jet Shen(33560625)**: Frontend Developer
+- **Nicholas Yew(33560625)**: Q&A Test Engineer
+
 ## System Architecture
 
 - **Frontend**: Next.js React application
