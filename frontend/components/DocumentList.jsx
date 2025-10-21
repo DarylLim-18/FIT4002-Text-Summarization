@@ -18,6 +18,8 @@ export default function DocumentList({ documents, onView, onDelete }) {
       {documents.map(doc => {
         const date = new Date(doc.upload_date).toLocaleDateString()
         const size = fmtSize(doc.file_size)
+        const hasScore = typeof doc.similarity_score === 'number'
+        const scorePercent = hasScore ? (doc.similarity_score * 100).toFixed(1) : null
 
         return (
           <div
@@ -33,6 +35,11 @@ export default function DocumentList({ documents, onView, onDelete }) {
                 >
                   {doc.file_name}
                 </h4>
+                {hasScore && (
+                  <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 text-xs rounded-full font-medium">
+                    {scorePercent}%
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 mb-3">
                 {date} • {size}
