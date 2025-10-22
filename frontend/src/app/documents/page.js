@@ -194,8 +194,6 @@ export default function DocumentsPage() {
         />
       )}
       {error && <p className="text-red-400">{error}</p>}
-      {loading && <p className="text-blue-400">Loading...</p>}
-
       <SearchBar
         value={query}
         onSearch={setQuery}
@@ -223,7 +221,12 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      <DocumentList documents={files} onView={handleView} onDelete={askDelete} />
+      <DocumentList
+        documents={files}
+        onView={handleView}
+        onDelete={askDelete}
+        loading={loading}
+      />
 
       {viewDoc && (
         <PreviewModal document={viewDoc} onClose={() => setViewDoc(null)} />
