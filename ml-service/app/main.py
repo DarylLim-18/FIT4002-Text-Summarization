@@ -180,15 +180,117 @@ async def summarize_text(request: SummarizationRequest):
     except Exception as e:
         logger.error(f"Summarization error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+    
+async def rank_results(query: str, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Rerank search results using Ollama to compare query with document summaries.
+    
+    Args:
+        query: Original search query
+        results: List of search results with metadata
+        
+    Returns:
+        Reranked list of results with relevance scores
+    """
+    try:
+        ranked_results = []
+        
+        for result in results:
+            # Extract summary from metadata or use document preview
+            summary = result.get('metadata', {}).get('summary', '')
+            if not summary:
+                # Use first 200 chars of document as fallback
+                summary = result.get('document', '')[:200]
+            
+            # Create relevance assessment prompt
+            prompt = f"""Query: {query}
+
+Document Summary: {summary}
+
+On a scale of 0-10, rate how relevant this document is to the query. 
+Consider semantic meaning, topic alignment, and usefulness.
+Respond with ONLY a number between 0 and 10."""
+
+            system_prompt = "You are a document relevance scorer. Provide only numerical scores."
+            
+            try:
+                # Get relevance score from Ollama
+                score_text = ollama_service.generate(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=0.1,  # Low temperature for consistent scoring
+                    max_tokens=10
+                )
+                
+                # Extract numeric score
+                score = float(''.join(filter(str.isdigit, score_text.strip()[:2])))
+                score = min(max(score, 0), 10)  # Clamp between 0-10
+                
+            except Exception as score_error:
+                logger.warning(f"Scoring failed for result, using distance: {score_error}")
+                # Fallback to distance-based score
+                score = (1 - result.get('distance', 0.5)) * 10
+            
+            ranked_results.append({
+                **result,
+                'relevance_score': score
+            })
+        
+        # Sort by relevance score (highest first)
+        ranked_results.sort(key=lambda x: x['relevance_score'], reverse=True)
+        logger.info(f"Reranked {len(ranked_results)} results based on relevance scores")
+        return ranked_results
+        
+    except Exception as e:
+        logger.error(f"Ranking error: {str(e)}")
+        # Return original results if ranking fails
+        return results
 
 @app.post("/search", response_model=SearchResponse)
 async def search_documents(request: SearchRequest):
     """Search similar documents"""
     try:
         start_time = time.time()
+
+        to_enhance = True
+        if to_enhance:
+            # Enhance query using Mistral
+            try:
+                enhance_prompt = f"""Original search query: "{request.query}"
+
+    Expand this query by:
+    1. Adding relevant synonyms and related terms
+    2. Including technical terminology if applicable
+    3. Clarifying ambiguous terms
+    4. Keeping the core intent
+
+    Provide ONLY the enhanced query, no explanations."""
+
+                system_prompt = """You are a search query optimizer. Expand queries to improve semantic search results while preserving the original intent. Output only the enhanced query text."""
+                
+                enhanced_query = ollama_service.generate(
+                    prompt=enhance_prompt,
+                    system_prompt=system_prompt,
+                    temperature=0.3,  # Low temperature for consistent expansion
+                    max_tokens=100
+                ).strip()
+                
+                # Use enhanced query if it's reasonable, otherwise fall back to original
+                if len(enhanced_query) > 0 and len(enhanced_query) < 500:
+                    logger.info(f"Enhanced query: '{request.query}' -> '{enhanced_query}'")
+                    query_to_embed = enhanced_query
+                else:
+                    logger.warning("Query enhancement produced invalid result, using original")
+                    query_to_embed = request.query
+                    
+            except Exception as enhance_error:
+                logger.warning(f"Query enhancement failed: {enhance_error}, using original query")
+                query_to_embed = request.query
+        else:
+            query_to_embed = request.query
         
         # Get query embedding
-        query_embedding = ollama_service.embed_text(request.query)
+        query_embedding = ollama_service.embed_text(query_to_embed)
         
         # Search in ChromaDB
         results = chroma_service.search_similar(
