@@ -209,18 +209,6 @@ ChromaDB data is persisted in the configured directory. To reset:
 rm -rf chroma_db/
 ```
 
-### Performance Tuning
-
-For better performance on Mac:
-
-```bash
-# Enable Metal GPU acceleration
-export OLLAMA_GPU=1
-
-# Adjust rate limiting
-ML_SERVICE_RATE_LIMIT=10
-```
-
 ## Troubleshooting
 
 ### Common Issues
@@ -280,8 +268,8 @@ ml-service/
 ├── chroma_db/               # ChromaDB persistent storage
 ├── requirements.txt         # Python dependencies
 ├── .env                     # Environment configuration
-├── .gitignore              # Git ignore rules
-└── README.md               # This file
+├── .gitignore               # Git ignore rules
+└── README.md                # This file
 ```
 
 ### Key Components
