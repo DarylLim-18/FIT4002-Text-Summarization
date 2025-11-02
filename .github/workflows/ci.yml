@@ -29,6 +29,9 @@ jobs:
       - name: Syntax check API entrypoint
         run: node --check backend/API.js
 
+      - name: Run backend tests
+        run: npm test
+
   frontend:
     name: Frontend (Next.js)
     runs-on: ubuntu-latest
