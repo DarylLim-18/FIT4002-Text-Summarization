@@ -114,7 +114,6 @@ export default function DocumentsPage() {
 
           response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/files/context-search`, {
             query: query,
-            n_results: 20,
             file_type_filter: fileTypeMapping[fileType]
           });
 

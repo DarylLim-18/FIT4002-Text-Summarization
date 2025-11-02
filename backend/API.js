@@ -132,11 +132,10 @@ async function getEmbedding(text) {
   }
 }
 
-async function searchSimilarDocuments(query, nResults = 5, filters = null) {
+async function searchSimilarDocuments(query, filters = null) {
   try {
     const response = await axios.post(`${ML_SERVICE_URL}/search`, {
       query,
-      n_results: nResults,
       filters
     }, { timeout: 15000 });
     
@@ -328,7 +327,7 @@ app.get('/files/search', async (req, res) => {
 // ——— API 6: Context Search using ML Service ——————————————————————————————————
 app.post('/files/context-search', async (req, res) => {
   try {
-    const { query, n_results = 5, file_type_filter = null } = req.body;
+    const { query, file_type_filter = null } = req.body;
     
     if (!query || !query.trim()) {
       return res.status(400).json({ error: 'Query is required' });
@@ -346,7 +345,7 @@ app.post('/files/context-search', async (req, res) => {
     
     try {
       // Search using ML Service
-      const mlResults = await searchSimilarDocuments(query, n_results * 2);
+      const mlResults = await searchSimilarDocuments(query);
       
       if (mlResults.length === 0) {
         return res.json({
@@ -401,8 +400,7 @@ app.post('/files/context-search', async (req, res) => {
           matched_text: mlResult ? mlResult.document.substring(0, 150) + '...' : ''
         };
       })
-      .sort((a, b) => b.similarity_score - a.similarity_score)
-      .slice(0, n_results);
+      .sort((a, b) => b.similarity_score - a.similarity_score);
 
       res.json({
         query: query,
