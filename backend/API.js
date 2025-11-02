@@ -146,7 +146,14 @@ async function searchSimilarDocuments(query, filters = null) {
   }
 }
 
-// ——— API 1: Upload & Summarize with ML Service ————————————————————————————————————
+/**
+ * POST /files/upload
+ * Upload a document, persist its metadata, and schedule ML summarization/vectorization.
+ * Request: multipart/form-data with `file` (TXT, PDF, DOCX) up to 10 MB.
+ * Success 200: Returns the stored row; file_summary may be null until async work completes.
+ * Errors: 400 for oversized/unsupported files or extraction failures, 500 for unexpected upload issues.
+ * Side effects: Triggers background summary generation and vector storage via the ML service.
+ */
 app.post('/files/upload', upload.single('file'), async (req, res) => {
   try {
     const { originalname, filename, size, mimetype } = req.file;
@@ -247,7 +254,12 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// ——— API 3: List all metadata ————————————————————————————————————
+/**
+ * GET /files
+ * List stored file metadata ordered by most recent upload.
+ * Success 200: Returns an array of file records.
+ * Errors: 500 if the database query fails.
+ */
 app.get('/files', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM files ORDER BY upload_date DESC');
@@ -258,7 +270,13 @@ app.get('/files', async (req, res) => {
   }
 });
 
-// ——— API 4: Delete file & metadata & ML Service entries ——————————————————————————————————
+/**
+ * DELETE /files/:id
+ * Remove a file from the database, disk storage, and ML service vector store.
+ * Success 204: No response body after cleanup completes.
+ * Errors: 404 when the file id is unknown, 500 if any deletion step fails.
+ * Side effects: Attempts best-effort removal of the underlying file and ML embeddings.
+ */
 app.delete('/files/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -293,7 +311,13 @@ app.delete('/files/:id', async (req, res) => {
   }
 });
 
-// ——— API 5: Traditional Search (GET) ——————————————————————————————————
+/**
+ * GET /files/search
+ * Perform keyword search across file metadata and stored content.
+ * Query params: `q` (optional search term) and `type` (all, pdf, docx, txt).
+ * Success 200: Returns matched records ordered by upload date.
+ * Errors: 500 if the search query fails.
+ */
 app.get('/files/search', async (req, res) => {
   try {
     const { q = '', type = 'all' } = req.query;
@@ -324,7 +348,13 @@ app.get('/files/search', async (req, res) => {
   }
 });
 
-// ——— API 6: Context Search using ML Service ——————————————————————————————————
+/**
+ * POST /files/context-search
+ * Run semantic search via the ML service and enrich hits with local metadata.
+ * Body: `{ query: string, file_type_filter?: string }`.
+ * Success 200: Returns `{ query, results, total_found }` including similarity scores and snippets.
+ * Errors: 400 for missing queries, 503 when the ML service is unavailable, 500 for other failures.
+ */
 app.post('/files/context-search', async (req, res) => {
   try {
     const { query, file_type_filter = null } = req.body;
@@ -422,7 +452,12 @@ app.post('/files/context-search', async (req, res) => {
   }
 }); // <- This closing brace was missing
 
-// ——— API 2: Get metadata by ID ————————————————————————————————————
+/**
+ * GET /files/:id
+ * Retrieve metadata and render-ready content for a single file.
+ * Success 200: Returns metadata, `file_url`, plain-text content (TXT), and HTML content (DOCX).
+ * Errors: 404 when the file cannot be found, 500 if disk or database access fails.
+ */
 app.get('/files/:id', async (req, res) => {
   try {
     const { id } = req.params;
