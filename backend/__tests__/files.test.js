@@ -95,6 +95,9 @@ describe("Files API", () => {
     return () => savedFilename;
   };
 
+  const getDbCallsExcludingHealthcheck = () =>
+    executeMock.mock.calls.filter(([sql]) => sql !== "SELECT 1");
+
   describe("POST /files/upload", () => {
     test("successfully uploads a PDF file", async () => {
       const captureSavedFilename = mockUploadDbFlow({
@@ -275,6 +278,18 @@ describe("Files API", () => {
       const newFiles = [...afterFiles].filter((file) => !beforeFiles.has(file));
       expect(newFiles).toHaveLength(0);
     });
+
+    test("requires a file in the request", async () => {
+      const response = await request(app)
+        .post("/files/upload");
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toEqual({ error: "File is required" });
+      expect(getDbCallsExcludingHealthcheck()).toHaveLength(0);
+      expect(axiosMock.post).not.toHaveBeenCalled();
+      expect(pdfParseMock).not.toHaveBeenCalled();
+      expect(mammothMock.extractRawText).not.toHaveBeenCalled();
+    });
   });
 
   describe("DELETE /files/:id", () => {
@@ -328,6 +343,184 @@ describe("Files API", () => {
       );
 
       unlinkSpy.mockRestore();
+    });
+  });
+
+  describe("GET /files", () => {
+    test("returns stored metadata", async () => {
+      const rows = [
+        {
+          id: 1,
+          file_name: "minutes.txt",
+          file_path: "minutes.txt",
+          file_size: 120,
+          file_type: "text/plain",
+          file_summary: "Summary A",
+          upload_date: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          id: 2,
+          file_name: "report.pdf",
+          file_path: "report.pdf",
+          file_size: 220,
+          file_type: "application/pdf",
+          file_summary: "Summary B",
+          upload_date: "2024-01-02T00:00:00.000Z",
+        },
+      ];
+
+      executeMock.mockResolvedValueOnce([rows]);
+
+      const response = await request(app).get("/files");
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual(rows);
+      expect(executeMock).toHaveBeenCalledWith(
+        expect.stringContaining("SELECT * FROM files ORDER BY upload_date DESC"),
+      );
+    });
+  });
+
+  describe("GET /files/:id", () => {
+    test("returns metadata and content for a text file", async () => {
+      const fileRow = {
+        id: 99,
+        file_name: "notes.txt",
+        file_path: "notes.txt",
+        file_size: 64,
+        file_type: "text/plain",
+        file_summary: "Meeting notes",
+        upload_date: "2024-02-01T00:00:00.000Z",
+      };
+
+      executeMock.mockResolvedValueOnce([[fileRow]]);
+
+      const readFileSpy = jest.spyOn(fs, "readFileSync").mockReturnValue("File body content");
+
+      const response = await request(app).get("/files/99");
+
+      expect(response.statusCode).toBe(200);
+      expect(readFileSpy).toHaveBeenCalledWith(path.join(UPLOAD_DIR, "notes.txt"), "utf8");
+      expect(response.body).toEqual({
+        id: "99",
+        file_name: "notes.txt",
+        file_size: 64,
+        file_type: "text/plain",
+        file_summary: "Meeting notes",
+        upload_date: "2024-02-01T00:00:00.000Z",
+        file_url: "http://localhost:4000/uploads/notes.txt",
+        content: "File body content",
+        contentHTML: "",
+      });
+
+      readFileSpy.mockRestore();
+    });
+
+    test("returns 404 when the file does not exist", async () => {
+      executeMock.mockResolvedValueOnce([[]]);
+
+      const response = await request(app).get("/files/12345");
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body).toEqual({ error: "Not found" });
+    });
+  });
+
+  describe("GET /files/search", () => {
+    test("performs keyword search with type filter", async () => {
+      const rows = [
+        {
+          id: 10,
+          file_name: "Budget.pdf",
+          file_path: "budget.pdf",
+          file_size: 512,
+          file_type: "application/pdf",
+          file_summary: "Budget summary",
+          upload_date: "2024-03-01T00:00:00.000Z",
+        },
+      ];
+
+      executeMock.mockResolvedValueOnce([rows]);
+
+      const response = await request(app)
+        .get("/files/search")
+        .query({ q: "budget", type: "pdf" });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual(rows);
+
+      const [sql, params] = getDbCallsExcludingHealthcheck()[0];
+      expect(sql).toContain("file_name LIKE ? OR file_summary LIKE ? OR file_content LIKE ?");
+      expect(sql).toContain("file_type = 'application/pdf'");
+      expect(params).toEqual(["%budget%", "%budget%", "%budget%"]);
+    });
+  });
+
+  describe("POST /files/context-search", () => {
+    test("returns semantic search results enriched with metadata", async () => {
+      const mlResults = [
+        {
+          document: "First semantic match",
+          distance: 0.25,
+          metadata: { file_id: "42" },
+        },
+        {
+          document: "Second semantic match",
+          distance: 0.5,
+          metadata: { file_id: "87" },
+        },
+      ];
+
+      axiosMock.post.mockImplementation((url, body, config) => {
+        if (url === "http://ml-service.test/search") {
+          return Promise.resolve({ data: { results: mlResults } });
+        }
+        return Promise.resolve({ data: { summary: "Mock summary" } });
+      });
+
+      const dbRows = [
+        {
+          id: 87,
+          file_name: "Strategy.docx",
+          file_path: "strategy.docx",
+          file_size: 2056,
+          file_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          file_summary: "Strategy overview",
+          upload_date: "2024-04-02T00:00:00.000Z",
+        },
+        {
+          id: 42,
+          file_name: "Roadmap.pdf",
+          file_path: "roadmap.pdf",
+          file_size: 1024,
+          file_type: "application/pdf",
+          file_summary: "Roadmap summary",
+          upload_date: "2024-04-01T00:00:00.000Z",
+        },
+      ];
+
+      executeMock.mockResolvedValueOnce([dbRows]);
+
+      const response = await request(app)
+        .post("/files/context-search")
+        .send({ query: "strategic initiatives" });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.query).toBe("strategic initiatives");
+      expect(response.body.total_found).toBe(2);
+      expect(response.body.results.map((item) => item.id)).toEqual([42, 87]);
+      expect(response.body.results[0].similarity_score).toBeCloseTo(0.75);
+      expect(response.body.results[0].matched_text).toBe("First semantic match...");
+
+      const [sql, params] = getDbCallsExcludingHealthcheck()[0];
+      expect(sql).toContain("IN (?,?)");
+      expect(params).toEqual([42, 87]);
+
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        "http://ml-service.test/search",
+        expect.objectContaining({ query: "strategic initiatives" }),
+        expect.any(Object),
+      );
     });
   });
 });

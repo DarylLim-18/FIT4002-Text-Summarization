@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const mysql = require('mysql2/promise');
-const { PDFParse } = require('pdf-parse');
+const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const cors = require('cors');
 const axios = require('axios');
@@ -156,6 +156,10 @@ async function searchSimilarDocuments(query, filters = null) {
  */
 app.post('/files/upload', upload.single('file'), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'File is required' });
+    }
+
     const { originalname, filename, size, mimetype } = req.file;
     const filePath = path.join(UPLOAD_DIR, filename);
 
@@ -170,15 +174,9 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
       if (mimetype === 'text/plain') {
         text = fs.readFileSync(filePath, 'utf8');
       } else if (mimetype === 'application/pdf') {
-        const parser = new PDFParse({ data: fs.readFileSync(filePath) });
-        try {
-          const result = await parser.getText();
-          text = result.text;
-        } finally {
-          await parser.destroy().catch(cleanupError => {
-            console.warn('PDF parser cleanup failed:', cleanupError.message);
-          });
-        }
+        const dataBuffer = fs.readFileSync(filePath);
+        const parsed = await pdfParse(dataBuffer);
+        text = parsed?.text || '';
       } else if (
         mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ) {
@@ -323,7 +321,7 @@ app.get('/files/search', async (req, res) => {
     const { q = '', type = 'all' } = req.query;
     const searchTerm = `%${q}%`;
 
-    sql = `
+    let sql = `
       SELECT id, file_name, file_path, file_size, file_type, file_summary, upload_date
       FROM files
       WHERE (file_name LIKE ? OR file_summary LIKE ? OR file_content LIKE ?)
@@ -422,7 +420,11 @@ app.post('/files/context-search', async (req, res) => {
 
       // Combine ML results with database metadata
       const enrichedResults = fileRows.map(fileData => {
-        const mlResult = mlResults.find(r => r.metadata?.file_id === fileData.id);
+        const fileIdNumber = Number(fileData.id);
+        const mlResult = mlResults.find(result => {
+          const metadataId = result.metadata?.file_id;
+          return metadataId !== undefined && Number(metadataId) === fileIdNumber;
+        });
         return {
           ...fileData,
           file_url: `${PUBLIC_BACKEND_URL}/uploads/${fileData.file_path}`,
