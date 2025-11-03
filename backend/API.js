@@ -2,8 +2,6 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-
-
 const mysql = require('mysql2/promise');
 const { PDFParse } = require('pdf-parse');
 const mammoth = require('mammoth');
@@ -326,11 +324,11 @@ app.get('/files/search', async (req, res) => {
     const searchTerm = `%${q}%`;
 
 
-    sql = "
+    sql = `
       SELECT id, file_name, file_path, file_size, file_type, file_summary, upload_date
       FROM files
       WHERE (file_name LIKE ? OR file_summary LIKE ? OR file_content LIKE ?)
-    ";
+    `;
 
 
     let params = [searchTerm, searchTerm, searchTerm];
